@@ -17,30 +17,29 @@ android {
     }
     namespace = "de.blinkt.openvpn"
     compileSdk = 36
-    //compileSdkPreview = "UpsideDownCake"
 
-    // Also update runcoverity.sh
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
         minSdk = 21
         targetSdk = 36
-        //targetSdkPreview = "UpsideDownCake"
         versionCode = 219
         versionName = "0.7.64"
-        externalNativeBuild {
-            cmake {
-                //arguments+= "-DCMAKE_VERBOSE_MAKEFILE=1"
-            }
-        }
-         ndk {
+        
+        // 📍 حذف اللغات غير الضرورية لتقليل الحجم
+        resConfigs("ar", "en")
+
+        // 📍 الضربة القاضية لتقليص حجم المكتبات البرمجية
+        ndk {
+            abiFilters.clear()
             abiFilters.add("arm64-v8a")
         }
 
-}
-
-
-    //testOptions.unitTests.isIncludeAndroidResources = true
+        externalNativeBuild {
+            cmake {
+            }
+        }
+    }
 
     externalNativeBuild {
         cmake {
@@ -51,25 +50,15 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets", "build/ovpnassets")
-
         }
-
-        create("ui") {
-        }
-
-        create("skeleton") {
-        }
-
-        getByName("debug") {
-        }
-
-        getByName("release") {
-        }
+        create("ui") {}
+        create("skeleton") {}
+        getByName("debug") {}
+        getByName("release") {}
     }
 
     signingConfigs {
         create("release") {
-            // ~/.gradle/gradle.properties
             val keystoreFile: String? by project
             storeFile = keystoreFile?.let { file(it) }
             val keystorePassword: String? by project
@@ -83,7 +72,6 @@ android {
         }
 
         create("releaseOvpn2") {
-            // ~/.gradle/gradle.properties
             val keystoreO2File: String? by project
             storeFile = keystoreO2File?.let { file(it) }
             val keystoreO2Password: String? by project
@@ -95,7 +83,6 @@ android {
             enableV1Signing = true
             enableV2Signing = true
         }
-
     }
 
     lint {
@@ -104,26 +91,20 @@ android {
         disable += setOf("MissingTranslation", "UnsafeNativeCodeLocation")
     }
 
-
     flavorDimensions += listOf("implementation", "ovpnimpl")
 
     productFlavors {
         create("ui") {
             dimension = "implementation"
         }
-
         create("skeleton") {
             dimension = "implementation"
         }
-
-        create("ovpn23")
-        {
+        create("ovpn23") {
             dimension = "ovpnimpl"
             buildConfigField("boolean", "openvpn3", "true")
         }
-
-        create("ovpn2")
-        {
+        create("ovpn2") {
             dimension = "ovpnimpl"
             versionNameSuffix = "-o2"
             buildConfigField("boolean", "openvpn3", "false")
@@ -132,6 +113,11 @@ android {
 
     buildTypes {
         getByName("release") {
+            // 📍 تفعيل الضغط وحذف الملفات الزائدة (هام جداً للحجم)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
             if (project.hasProperty("icsopenvpnDebugSign")) {
                 logger.warn("property icsopenvpnDebugSign set, using debug signing for release")
                 signingConfig = android.signingConfigs.getByName("debug")
@@ -147,12 +133,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
     }
 
+    // 📍 قمت بتعطيل التقسيم المتعدد لضمان إنتاج ملف APK واحد صغير
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
-            isUniversalApk = true
+            isEnable = false 
         }
     }
 
@@ -173,48 +157,29 @@ android {
                 keyPassword = keystoreTPAliasPassword
                 val keystoreTPAlias: String? by project
                 keyAlias = keystoreTPAlias
-
-                if (keystoreTPFile?.isEmpty() ?: true)
-                    println("keystoreTPFile not set, disabling transparency signing")
-                if (keystoreTPPassword?.isEmpty() ?: true)
-                    println("keystoreTPPassword not set, disabling transparency signing")
-                if (keystoreTPAliasPassword?.isEmpty() ?: true)
-                    println("keystoreTPAliasPassword not set, disabling transparency signing")
-                if (keystoreTPAlias?.isEmpty() ?: true)
-                    println("keyAlias not set, disabling transparency signing")
-
             }
         }
     }
 }
 
 var swigcmd = "swig"
-// Workaround for macOS(arm64) and macOS(intel) since it otherwise does not find swig and
-// I cannot get the Exec task to respect the PATH environment :(
 if (file("/opt/homebrew/bin/swig").exists())
     swigcmd = "/opt/homebrew/bin/swig"
 else if (file("/usr/local/bin/swig").exists())
     swigcmd = "/usr/local/bin/swig"
 
-
 fun registerGenTask(variantName: String, variantDirName: String): File {
     val baseDir = File(buildDir, "generated/source/ovpn3swig/${variantDirName}")
     val genDir = File(baseDir, "net/openvpn/ovpn3")
-
-    tasks.register<Exec>("generateOpenVPN3Swig${variantName}")
-    {
-
-        doFirst {
-            mkdir(genDir)
-        }
+    tasks.register<Exec>("generateOpenVPN3Swig${variantName}") {
+        doFirst { mkdir(genDir) }
         commandLine(listOf(swigcmd, "-outdir", genDir, "-outcurrentdir", "-c++", "-java", "-package", "net.openvpn.ovpn3",
                 "-Isrc/main/cpp/openvpn3/client", "-Isrc/main/cpp/openvpn3/",
                 "-DOPENVPN_PLATFORM_ANDROID",
                 "-o", "${genDir}/ovpncli_wrap.cxx", "-oh", "${genDir}/ovpncli_wrap.h",
                 "src/main/cpp/openvpn3/client/ovpncli.i"))
-        inputs.files( "src/main/cpp/openvpn3/client/ovpncli.i")
-        outputs.dir( genDir)
-
+        inputs.files("src/main/cpp/openvpn3/client/ovpncli.i")
+        outputs.dir(genDir)
     }
     return baseDir
 }
@@ -223,17 +188,13 @@ android.applicationVariants.all(object : Action<ApplicationVariant> {
     override fun execute(variant: ApplicationVariant) {
         val sourceDir = registerGenTask(variant.name, variant.baseName.replace("-", "/"))
         val task = tasks.named("generateOpenVPN3Swig${variant.name}").get()
-
         variant.registerJavaGeneratingTask(task, sourceDir)
     }
 })
 
-
 dependencies {
-    // https://maven.google.com/web/index.html
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.core.ktx)
-
     uiImplementation(libs.android.view.material)
     uiImplementation(libs.androidx.activity)
     uiImplementation(libs.androidx.activity.ktx)
@@ -241,7 +202,6 @@ dependencies {
     uiImplementation(libs.androidx.cardview)
     uiImplementation(libs.androidx.viewpager2)
     uiImplementation(libs.androidx.constraintlayout)
-    uiImplementation(libs.androidx.core.ktx)
     uiImplementation(libs.androidx.fragment.ktx)
     uiImplementation(libs.androidx.lifecycle.runtime.ktx)
     uiImplementation(libs.androidx.lifecycle.viewmodel.ktx)
@@ -252,10 +212,8 @@ dependencies {
     uiImplementation(libs.kotlin)
     uiImplementation(libs.mpandroidchart)
     uiImplementation(libs.square.okhttp)
-
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.junit)
-    testImplementation(libs.kotlin)
     testImplementation(libs.mockito.core)
     testImplementation(libs.robolectric)
 }
