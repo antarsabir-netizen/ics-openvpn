@@ -33,7 +33,11 @@ android {
                 //arguments+= "-DCMAKE_VERBOSE_MAKEFILE=1"
             }
         }
-    }
+         ndk {
+            abiFilters.add("arm64-v8a")
+        }
+
+}
 
 
     //testOptions.unitTests.isIncludeAndroidResources = true
